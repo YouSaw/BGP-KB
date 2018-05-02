@@ -80,7 +80,6 @@ def build_sql_db():
     while(stream.get_next_record(rec)): #4 elements multithreaded?
         st2 = time.time()
         sum_time = st2 - st1 + sum_time
-
         if begin_trans:
             c.execute('BEGIN')
             print("Begin Trans")
