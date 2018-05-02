@@ -59,102 +59,81 @@ def build_sql_db():
     rec = BGPRecord()
 
     stream.add_filter('collector','rrc12')
-    stream.add_interval_filter(1438416516+2*3600,1438416516+4*3600)
+    stream.add_interval_filter(1438416516,1438416516+100)
     stream.start()
 
-    sum_time = 0
+
+    ####Index and lock####
     idx = 0
-    begin_trans = True
-    st1 = time.time()
-
-    t_time = time.time()
-
     fullidx = 0
-    withdraw_time_sum = 0
-    link_time_sum = 0
-    prefix_time_sum = 0
-    prefix_update_time = 0
+    begin_trans = True
+
+    ####Timings####
+    full_processing_time = time.time()
+    fetch_stream_sum = 0
+    sql_withdraw_sum = 0
+    sql_link_sum = 0
+    sql_prefix_sum = 0
     link_update_time = 0
     ip_inflate_sum = 0
+    fetch_stream_time = time.time()
 
     while(stream.get_next_record(rec)): #4 elements multithreaded?
-        st2 = time.time()
-        sum_time = st2 - st1 + sum_time
+        fetch_stream_sum = time.time() - fetch_stream_time + fetch_stream_sum
+        idx += 1
+
         if begin_trans:
             c.execute('BEGIN')
             print("Begin Trans")
             begin_trans = False
-
-        idx += 1
 
         if rec.status != "valid":
             continue
         else:
             elem = rec.get_next_elem()
             while(elem):
-
+                fullidx += 1
                 if elem.type == "A":
-                    prefix1_time = time.time()
-
                     prefix = elem.fields["prefix"]
                     as_path = elem.fields["as-path"].split(" ")
                     origin = as_path[-1]
                     e_time = elem.time
-                    fullidx += 1
 
-                    #prefix_update1 = time.time()
-                    #IP Prefix database
-                    inflate1 = time.time()
+                    ip_inflate_time = time.time()
                     ip_min, ip_max = calculate_min_max(prefix)
-                    ip_inflate_sum = ip_inflate_sum + time.time()-inflate1
-                    #c.execute("UPDATE prefix_as SET count = count + 1  WHERE ip_min = (?) AND ip_max = (?) AND as_o = (?)", (ip_min, ip_max, origin))
-                    #prefix_update_time = time.time() - prefix_update1 + prefix_update_time
-                    #if c.rowcount == 0:
+                    ip_inflate_sum = ip_inflate_sum + time.time()-ip_inflate_time
+
+                    sql_prefix_time = time.time()
                     c.execute("INSERT INTO prefix_as VALUES(?,?,?,?,?)", (ip_min, ip_max, origin, 1, e_time))
+                    sql_prefix_sum = time.time() - sql_prefix_time + sql_prefix_sum
 
-                    prefix_time_sum = time.time() - prefix1_time + prefix_time_sum
-
-
-                    link1_time = time.time()
-                    #AS link database
+                    sql_link_time = time.time()
                     for as1,as2 in zip(as_path, as_path[1:]) :
                         link_update1 = time.time()
-                        #c.execute("UPDATE as_link SET count = count + 1 WHERE as_o = (?) AND as_n = (?)",
-                        #              (as1, as2))
+
                         link_update_time = time.time() - link_update1 + link_update_time
-                        #if c.rowcount == 0:
                         c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
-                    link_time_sum = time.time() - link1_time + link_time_sum
+                    sql_link_sum = time.time() - sql_link_time + sql_link_sum
 
                 elif elem.type == "W":
-                    fullidx += 1
-                    withdraw1 = time.time()
                     prefix = elem.fields["prefix"]
                     e_time = elem.time
                     ip_min, ip_max = calculate_min_max(prefix)
-                    #196.72094464302063 19.156189680099487 8.407627582550049 0 1.2567062377929688 0.03907585144042969 165.27871417999268 66840 108945
-                    #196.72094464302063 19.156189680099487 8.407627582550049 0 1.2567062377929688 0.03907585144042969 165.27871417999268 66840 108945
-                    #IP Prefix database
+                    sql_withdraw_time = time.time()
                     c.execute("INSERT INTO prefix_as VALUES(?,?,?,?,?)", (ip_min, ip_max, -1, 1, e_time))
-
-                    #c.execute(
-                    #    "UPDATE prefix_as SET count = count - 1, last_update = (?) WHERE ip_min = (?) AND ip_max = (?) AND last_update - (?) > 86400",
-                    #    (e_time, ip_min, ip_max, e_time))
-                    withdraw_time_sum = time.time() - withdraw1 + withdraw_time_sum
+                    sql_withdraw_sum = time.time() - sql_withdraw_time + sql_withdraw_sum
                 elem = rec.get_next_elem()
 
             if idx % 1000 == 0: #Avoid to manny commits
                 print("Commit")
                 begin_trans = True
                 c.execute("COMMIT")
-                #conn.commit()
-
-        st1 = time.time()
+        fetch_stream_time = time.time()
     conn.commit()
-    print(time.time() - t_time, sum_time, prefix_time_sum, prefix_update_time, ip_inflate_sum ,link_time_sum, link_update_time,withdraw_time_sum ,idx, fullidx)
     conn.close()
-#274.5066967010498 19.085091829299927 83.94422888755798 82.19763445854187 165.22026348114014 164.51573514938354 66840
-#206.89421820640564
+    print(time.time() - full_processing_time, fetch_stream_sum, sql_prefix_sum, ip_inflate_sum ,sql_link_sum, link_update_time, sql_withdraw_sum ,idx, fullidx)
+
+
 
 def test_sql():
     conn = sqlite3.connect(db_name)
@@ -198,7 +177,7 @@ def print_db():
 
 if __name__ == '__main__':
     prepare_sql_database()
-    test_sql()
+    #test_sql()
     build_sql_db()
     #print_db()
    #test_sql()
