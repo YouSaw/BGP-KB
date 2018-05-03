@@ -7,9 +7,10 @@ from _pybgpstream import BGPStream, BGPRecord, BGPElem
 import sqlite3
 import iptools
 import time
+import os
 
 
-db_name = 'bgp_stage3.db'
+db_name = 'bgp_stage2.db'
 
 def calculate_min_max(ip):
     ip_range = iptools.IpRange(ip)
@@ -102,6 +103,9 @@ def futures_done(future_list):
     return True
 
 def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_nr = "rrc12"):
+    current_nice = os.nice(0)
+    os.nice(7-current_nice)
+
     rec = BGPRecord()
     stream = BGPStream()
     stream.add_filter('collector', collector_nr)
@@ -112,6 +116,8 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
     idx = 0
     element_idx = 0
     empty_count = 0
+
+    record_list = []
     while stream.get_next_record(rec):
         d = get_record_information(rec)
         if d == [] or d is False:
@@ -119,13 +125,21 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
         else:
             try:
                 idx += 1
-                q.put(d)
+                record_list.extend(d)
+                if idx % 100 == 0:
+                    q.put(record_list)
+                    record_list = []
             except:
                 print("[!] Queue is full.", q.qsize())
                 time.sleep(10)
-                q.put(d)
+                q.put(record_list)
+                record_list = []
+
             element_idx += len(d)
+
+    q.put(record_list)
     print("[+] Done fetching")
+
     return idx, empty_count, element_idx
 
 def build_sql_db(thread_count):
@@ -138,7 +152,6 @@ def build_sql_db(thread_count):
     ####Index and lock####
     idx = 0
     fullidx = 0
-    last_idx = 0
     begin_trans = True
 
     ####Timings####
@@ -154,12 +167,12 @@ def build_sql_db(thread_count):
     for i in range(0,thread_count):
         fetch_futures.append(fetch_executer.submit(get_bgp_record, q, 1438532516+1000*i, 1438532516+1000*i+1000))
 
+    current_nice = os.nice(0)
+    os.nice(0-current_nice)
     while(not futures_done(fetch_futures) or not q.empty()):
         idx += 1
-
         if begin_trans:
             c.execute('BEGIN')
-            print("[!] Begin sql transaction")
             begin_trans = False
 
         fetch_stream_time = time.time()
@@ -183,8 +196,9 @@ def build_sql_db(thread_count):
                 for as1,as2 in zip(parsed_record.as_path, parsed_record.as_path[1:]) :
                     c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
                 sql_link_sum = time.time() - sql_link_time + sql_link_sum
+#Time: 81.17499852180481 Fetch time: 28.36745047569275 sql_prefix: 8.7795569896698 sql_link 25.34091353416443
 
-        if idx % 5000 == 0: #Avoid to manny commits
+        if idx % 1000 == 0: #Avoid to manny commits
             print("[!] Commit. Processed :",fullidx)
             begin_trans = True
             c.execute("COMMIT")
@@ -202,7 +216,7 @@ def build_sql_db(thread_count):
         empty_count += count
 
     print("Time:",time.time() - full_processing_time,"Fetch time:", fetch_stream_sum, "sql_prefix:",sql_prefix_sum,"sql_link",sql_link_sum,"\n"
-          "fetched records:",fetch_idx, "fetched elements:",elem_count, "fetched empty records:", empty_count, "processed records:", fullidx)
+          "fetched records:",fetch_idx, "fetched elements:",elem_count, "fetched empty records:", empty_count, "processed elements:", fullidx)
 
 
 
@@ -223,6 +237,11 @@ def test_sql():
     conn.commit()
     conn.close()
 
+#TODO
+def make_chunks(start_time, end_time, chunks):
+    pass
+
+#TODO
 def aggregate():
     conn = sqlite3.connect(db_name)
     c = conn.cursor()
@@ -249,7 +268,7 @@ def print_db():
 if __name__ == '__main__':
     prepare_sql_database()
     #test_sql()
-    build_sql_db(8)
+    build_sql_db(16)
     #print_db()
    #test_sql(2
    #ip_min, ip_max = cal8late_min_max("2001:db8::/32")
