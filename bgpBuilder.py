@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
+import multiprocessing as mp
+
+
 from _pybgpstream import BGPStream, BGPRecord, BGPElem
 import sqlite3
 import iptools
 import time
 
-db_name = 'bgp_stage1.db'
+
+db_name = 'bgp_stage3.db'
 
 def calculate_min_max(ip):
     ip_range = iptools.IpRange(ip)
@@ -56,6 +61,7 @@ class record_information(object):
         self.min_ip = 0
         self.time = 0
 
+
 def get_record_information(rec):
     record_information_list = []
 
@@ -82,23 +88,57 @@ def get_record_information(rec):
             elem = rec.get_next_elem()
     return record_information_list
 
-def build_sql_db():
+
+def values_in_future(future_list):
+    for future in future_list:
+        if future.result():
+            return True
+    return False
+
+def futures_done(future_list):
+    for future in future_list:
+        if not future.done():
+            return False
+    return True
+
+def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_nr = "rrc12"):
+    rec = BGPRecord()
+    stream = BGPStream()
+    stream.add_filter('collector', collector_nr)
+    stream.add_interval_filter(start_time, end_time)
+    stream.start()
+    print("[!] Starting multiprocess, range:", start_time, "-" ,end_time, "(",end_time-start_time,")")
+
+    idx = 0
+    element_idx = 0
+    empty_count = 0
+    while stream.get_next_record(rec):
+        d = get_record_information(rec)
+        if d == [] or d is False:
+            empty_count += 1
+        else:
+            try:
+                idx += 1
+                q.put(d)
+            except:
+                print("[!] Queue is full.", q.qsize())
+                time.sleep(10)
+                q.put(d)
+            element_idx += len(d)
+    print("[+] Done fetching")
+    return idx, empty_count, element_idx
+
+def build_sql_db(thread_count):
     conn = sqlite3.connect(db_name)
     conn.isolation_level = None
     c = conn.cursor()
 
-    # Create a new bgpstream instance and a reusable bgprecord instance
-    stream = BGPStream()
-    rec = BGPRecord()
-
-    stream.add_filter('collector','rrc12')
-    stream.add_interval_filter(1438416516,1438416516+100)
-    stream.start()
-
+    fetch_executer = ProcessPoolExecutor(max_workers=thread_count)
 
     ####Index and lock####
     idx = 0
     fullidx = 0
+    last_idx = 0
     begin_trans = True
 
     ####Timings####
@@ -106,22 +146,31 @@ def build_sql_db():
     fetch_stream_sum = 0
     sql_link_sum = 0
     sql_prefix_sum = 0
-    ip_inflate_sum = 0
-    fetch_stream_time = time.time()
 
-    while(stream.get_next_record(rec)): #4 elements multithreaded?
-        fetch_stream_sum = time.time() - fetch_stream_time + fetch_stream_sum
+    ####MP fetch of values####
+    m = mp.Manager()
+    q = m.Queue()
+    fetch_futures = []
+    for i in range(0,thread_count):
+        fetch_futures.append(fetch_executer.submit(get_bgp_record, q, 1438532516+1000*i, 1438532516+1000*i+1000))
+
+    while(not futures_done(fetch_futures) or not q.empty()):
         idx += 1
 
         if begin_trans:
             c.execute('BEGIN')
-            print("Begin Trans")
+            print("[!] Begin sql transaction")
             begin_trans = False
 
-        ip_inflate_time = time.time()
-        record_list = get_record_information(rec)
-        ip_inflate_sum = ip_inflate_sum + time.time() - ip_inflate_time
+        fetch_stream_time = time.time()
+        try:
+            record_list = q.get(timeout = 1)
+        except:
+            print("[-] used timeout")
+            continue
 
+        fetch_stream_sum =  time.time() - fetch_stream_time + fetch_stream_sum
+        #print(record_list)
         for parsed_record in record_list:
             fullidx += 1
 
@@ -135,14 +184,25 @@ def build_sql_db():
                     c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
                 sql_link_sum = time.time() - sql_link_time + sql_link_sum
 
-        if idx % 1000 == 0: #Avoid to manny commits
-            print("Commit")
+        if idx % 5000 == 0: #Avoid to manny commits
+            print("[!] Commit. Processed :",fullidx)
             begin_trans = True
             c.execute("COMMIT")
-        fetch_stream_time = time.time()
+
     conn.commit()
     conn.close()
-    print(time.time() - full_processing_time,"fetch:", fetch_stream_sum, "sql_prefix:",sql_prefix_sum, "ip_inflate", ip_inflate_sum ,"sql_link",sql_link_sum, idx, fullidx)
+
+    empty_count = 0
+    fetch_idx = 0
+    elem_count = 0
+    for future in fetch_futures:
+        idx, count, elems = future.result()
+        fetch_idx += idx
+        elem_count += elems
+        empty_count += count
+
+    print("Time:",time.time() - full_processing_time,"Fetch time:", fetch_stream_sum, "sql_prefix:",sql_prefix_sum,"sql_link",sql_link_sum,"\n"
+          "fetched records:",fetch_idx, "fetched elements:",elem_count, "fetched empty records:", empty_count, "processed records:", fullidx)
 
 
 
@@ -189,8 +249,8 @@ def print_db():
 if __name__ == '__main__':
     prepare_sql_database()
     #test_sql()
-    build_sql_db()
+    build_sql_db(8)
     #print_db()
-   #test_sql()
-   #ip_min, ip_max = calculate_min_max("2001:db8::/32")
+   #test_sql(2
+   #ip_min, ip_max = cal8late_min_max("2001:db8::/32")
    #print("[!] Min IP:", ip_min, "Max IP:", ip_max)
