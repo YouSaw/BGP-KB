@@ -47,7 +47,40 @@ def prepare_sql_database():
     conn.close()
 #283.39312648773193 19.172956466674805 86.84735012054443 85.06265759468079 171.36269617080688 170.65625143051147 66840
 
+class record_information(object):
+    def __init__(self):
+        self.type = "N"
+        self.origin = -1
+        self.as_path = []
+        self.max_ip = 0
+        self.min_ip = 0
+        self.time = 0
 
+def get_record_information(rec):
+    record_information_list = []
+
+    if rec.status != "valid":
+        return False
+    else:
+        elem = rec.get_next_elem()
+        while (elem):
+            ri = record_information()
+            if elem.type == "A":
+                ri.type = "A"
+                prefix = elem.fields["prefix"]
+                ri.as_path = elem.fields["as-path"].split(" ")
+                ri.origin = ri.as_path[-1]
+                ri.time = elem.time
+                ri.min_ip, ri.max_ip = calculate_min_max(prefix)
+
+            elif elem.type == "W":
+                ri.type = "W"
+                prefix = elem.fields["prefix"]
+                ri.time = elem.time
+                ri.min_ip, ri.max_ip = calculate_min_max(prefix)
+            record_information_list.append(ri)
+            elem = rec.get_next_elem()
+    return record_information_list
 
 def build_sql_db():
     conn = sqlite3.connect(db_name)
@@ -71,10 +104,8 @@ def build_sql_db():
     ####Timings####
     full_processing_time = time.time()
     fetch_stream_sum = 0
-    sql_withdraw_sum = 0
     sql_link_sum = 0
     sql_prefix_sum = 0
-    link_update_time = 0
     ip_inflate_sum = 0
     fetch_stream_time = time.time()
 
@@ -87,51 +118,31 @@ def build_sql_db():
             print("Begin Trans")
             begin_trans = False
 
-        if rec.status != "valid":
-            continue
-        else:
-            elem = rec.get_next_elem()
-            while(elem):
-                fullidx += 1
-                if elem.type == "A":
-                    prefix = elem.fields["prefix"]
-                    as_path = elem.fields["as-path"].split(" ")
-                    origin = as_path[-1]
-                    e_time = elem.time
+        ip_inflate_time = time.time()
+        record_list = get_record_information(rec)
+        ip_inflate_sum = ip_inflate_sum + time.time() - ip_inflate_time
 
-                    ip_inflate_time = time.time()
-                    ip_min, ip_max = calculate_min_max(prefix)
-                    ip_inflate_sum = ip_inflate_sum + time.time()-ip_inflate_time
+        for parsed_record in record_list:
+            fullidx += 1
 
-                    sql_prefix_time = time.time()
-                    c.execute("INSERT INTO prefix_as VALUES(?,?,?,?,?)", (ip_min, ip_max, origin, 1, e_time))
-                    sql_prefix_sum = time.time() - sql_prefix_time + sql_prefix_sum
+            if parsed_record.type != "N":
+                sql_prefix_withdraw_time = time.time()
+                c.execute("INSERT INTO prefix_as VALUES(?,?,?,?,?)", (parsed_record.min_ip, parsed_record.max_ip, parsed_record.origin, 1, parsed_record.time))
+                sql_prefix_sum = time.time() - sql_prefix_withdraw_time + sql_prefix_sum
 
-                    sql_link_time = time.time()
-                    for as1,as2 in zip(as_path, as_path[1:]) :
-                        link_update1 = time.time()
+                sql_link_time = time.time()
+                for as1,as2 in zip(parsed_record.as_path, parsed_record.as_path[1:]) :
+                    c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
+                sql_link_sum = time.time() - sql_link_time + sql_link_sum
 
-                        link_update_time = time.time() - link_update1 + link_update_time
-                        c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
-                    sql_link_sum = time.time() - sql_link_time + sql_link_sum
-
-                elif elem.type == "W":
-                    prefix = elem.fields["prefix"]
-                    e_time = elem.time
-                    ip_min, ip_max = calculate_min_max(prefix)
-                    sql_withdraw_time = time.time()
-                    c.execute("INSERT INTO prefix_as VALUES(?,?,?,?,?)", (ip_min, ip_max, -1, 1, e_time))
-                    sql_withdraw_sum = time.time() - sql_withdraw_time + sql_withdraw_sum
-                elem = rec.get_next_elem()
-
-            if idx % 1000 == 0: #Avoid to manny commits
-                print("Commit")
-                begin_trans = True
-                c.execute("COMMIT")
+        if idx % 1000 == 0: #Avoid to manny commits
+            print("Commit")
+            begin_trans = True
+            c.execute("COMMIT")
         fetch_stream_time = time.time()
     conn.commit()
     conn.close()
-    print(time.time() - full_processing_time, fetch_stream_sum, sql_prefix_sum, ip_inflate_sum ,sql_link_sum, link_update_time, sql_withdraw_sum ,idx, fullidx)
+    print(time.time() - full_processing_time,"fetch:", fetch_stream_sum, "sql_prefix:",sql_prefix_sum, "ip_inflate", ip_inflate_sum ,"sql_link",sql_link_sum, idx, fullidx)
 
 
 
