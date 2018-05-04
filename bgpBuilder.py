@@ -10,7 +10,7 @@ import time
 import os
 
 
-db_name = 'bgp_stage2.db'
+db_name = 'bgp_stage0.db'
 
 def calculate_min_max(ip):
     ip_range = iptools.IpRange(ip)
@@ -51,7 +51,6 @@ def prepare_sql_database():
     c.execute('PRAGMA main.journal_mode=WAL')
     conn.commit()
     conn.close()
-#283.39312648773193 19.172956466674805 86.84735012054443 85.06265759468079 171.36269617080688 170.65625143051147 66840
 
 class record_information(object):
     def __init__(self):
@@ -103,6 +102,14 @@ def futures_done(future_list):
     return True
 
 def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_nr = "rrc12"):
+    """
+    fetches bgp records
+    :param q: queue
+    :param start_time:
+    :param end_time:
+    :param collector_nr: string
+    :return: fetch_count, emtpy_count, element_count
+    """
     current_nice = os.nice(0)
     os.nice(7-current_nice)
 
@@ -131,16 +138,15 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
                     record_list = []
             except:
                 print("[!] Queue is full.", q.qsize())
-                time.sleep(10)
+                while q.Full():
+                    time.sleep(10)
                 q.put(record_list)
                 record_list = []
-
             element_idx += len(d)
-
     q.put(record_list)
     print("[+] Done fetching")
-
     return idx, empty_count, element_idx
+
 
 def build_sql_db(thread_count):
     conn = sqlite3.connect(db_name)
@@ -165,8 +171,9 @@ def build_sql_db(thread_count):
     q = m.Queue()
     fetch_futures = []
     for i in range(0,thread_count):
-        fetch_futures.append(fetch_executer.submit(get_bgp_record, q, 1438532516+1000*i, 1438532516+1000*i+1000))
+        fetch_futures.append(fetch_executer.submit(get_bgp_record, q, 1438532516+2000*i, 1438532516+2000*i+2000))
 
+    #Adjust priority
     current_nice = os.nice(0)
     os.nice(0-current_nice)
     while(not futures_done(fetch_futures) or not q.empty()):
@@ -196,13 +203,15 @@ def build_sql_db(thread_count):
                 for as1,as2 in zip(parsed_record.as_path, parsed_record.as_path[1:]) :
                     c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (as1, as2, 1, 0))
                 sql_link_sum = time.time() - sql_link_time + sql_link_sum
-#Time: 81.17499852180481 Fetch time: 28.36745047569275 sql_prefix: 8.7795569896698 sql_link 25.34091353416443
 
         if idx % 1000 == 0: #Avoid to manny commits
             print("[!] Commit. Processed :",fullidx)
             begin_trans = True
             c.execute("COMMIT")
 
+        if idx % 100000 == 0:
+            print("[!] Aggregation started!")
+            aggregate_entrys()
     conn.commit()
     conn.close()
 
@@ -241,15 +250,62 @@ def test_sql():
 def make_chunks(start_time, end_time, chunks):
     pass
 
-#TODO
-def aggregate():
+def aggregate_entrys():
+    """
+    Aggregates entrys for smaller dbs
+    :return: True if successesfull
+    """
     conn = sqlite3.connect(db_name)
     c = conn.cursor()
-    c.execute("")
-#    as_prefix ALL min_ip, max_ip, AS, count
-#    as_prefix ALL W same^
-#    as_prefix_
+
+    t1 = time.time()
+    try:
+        c.execute('''CREATE TABLE IF NOT EXISTS prefix_as_aggregate
+                     (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
+                     (as_o INTEGER, as_n INTEGER, count INTEGER)''')
+
+        c.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
+                  " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
+        c.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
+
+        c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
+                  " MAX(last_update) AS last_update FROM prefix_as_aggregate GROUP BY ip_min, ip_max, as_o")
+
+        c.execute("DROP TABLE prefix_as_aggregate")
+        c.execute("ALTER TABLE tmp RENAME TO prefix_as_aggregate")
+
+        c.execute("CREATE TABLE tmp AS SELECT as_o, as_n, sum(count) AS count FROM link_as_aggregate GROUP BY as_o, as_n")
+        c.execute("DROP TABLE link_as_aggregate")
+        c.execute("ALTER TABLE tmp RENAME TO link_as_aggregate")
+
+        c.execute("DROP TABLE prefix_as")
+        c.execute("DROP TABLE as_link")
+
+        c.execute('''CREATE TABLE IF NOT EXISTS as_link
+                     (as_o INTEGER, as_n INTEGER, count INTEGER, last_update INTEGER)''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS prefix_as
+                     (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+        c.execute("VACUUM")
+
+    except Exception as e:
+        print("[-] Something went wrong in the aggregation", e)
+        return False
+
+    print("Aggregation time:", time.time() - t1)
+    conn.commit()
     conn.close()
+    return True
+
+def filter_entrys():
+    """
+    Filter prefix entrys by substracting withdraws count from the announcemens and save all this in a final Database.
+    Entrys below a threshold will be pruned
+    :return: False or True maybe
+    """
+
 
 def print_db():
     conn = sqlite3.connect(db_name)
@@ -268,7 +324,7 @@ def print_db():
 if __name__ == '__main__':
     prepare_sql_database()
     #test_sql()
-    build_sql_db(16)
+    aggregate_entrys()
     #print_db()
    #test_sql(2
    #ip_min, ip_max = cal8late_min_max("2001:db8::/32")
