@@ -2,6 +2,21 @@
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
 import multiprocessing as mp
 
+import logging
+
+session_name = "test"
+
+logFormatter = logging.Formatter("%(asctime)-10s %(levelname)-6s %(message)-10s", datefmt='%d %H:%M:%S')
+rootLogger = logging.getLogger()
+rootLogger.level = logging.INFO
+
+fileHandler = logging.FileHandler("{0}/{1}.log".format("logs", session_name))
+fileHandler.setFormatter(logFormatter)
+rootLogger.addHandler(fileHandler)
+
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+rootLogger.addHandler(consoleHandler)
 
 from _pybgpstream import BGPStream, BGPRecord, BGPElem
 import sqlite3
@@ -118,7 +133,9 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
     stream.add_filter('collector', collector_nr)
     stream.add_interval_filter(start_time, end_time)
     stream.start()
-    print("[!] Starting multiprocess, range:", start_time, "-" ,end_time, "(",end_time-start_time,")")
+
+    rootLogger.info("[!] Starting multiprocess, range:" + str(start_time) + "-" + str(end_time) + "(" + str(end_time-start_time) + ")")
+    #print("[!] Starting multiprocess, range:", start_time, "-" ,end_time, "(",end_time-start_time,")")
 
     idx = 0
     element_idx = 0
@@ -137,14 +154,14 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
                     q.put(record_list)
                     record_list = []
             except:
-                print("[!] Queue is full.", q.qsize())
+                rootLogger.warning("[!] Queue is full. "+ q.qsize())
                 while q.Full():
                     time.sleep(10)
                 q.put(record_list)
                 record_list = []
             element_idx += len(d)
     q.put(record_list)
-    print("[+] Done fetching")
+    rootLogger.info("[+] Done fetching")
     return idx, empty_count, element_idx
 
 
@@ -186,7 +203,8 @@ def build_sql_db(thread_count):
         try:
             record_list = q.get(timeout = 1)
         except:
-            print("[-] used timeout")
+            rootLogger.info("[!] queue is emtpy")
+            time.sleep(2)
             continue
 
         fetch_stream_sum =  time.time() - fetch_stream_time + fetch_stream_sum
@@ -205,12 +223,12 @@ def build_sql_db(thread_count):
                 sql_link_sum = time.time() - sql_link_time + sql_link_sum
 
         if idx % 1000 == 0: #Avoid to manny commits
-            print("[!] Commit. Processed :",fullidx)
+            rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             begin_trans = True
             c.execute("COMMIT")
 
         if idx % 100000 == 0:
-            print("[!] Aggregation started!")
+            rootLogger.info("[!] Aggregation started!")
             aggregate_entrys()
     conn.commit()
     conn.close()
@@ -224,8 +242,9 @@ def build_sql_db(thread_count):
         elem_count += elems
         empty_count += count
 
-    print("Time:",time.time() - full_processing_time,"Fetch time:", fetch_stream_sum, "sql_prefix:",sql_prefix_sum,"sql_link",sql_link_sum,"\n"
-          "fetched records:",fetch_idx, "fetched elements:",elem_count, "fetched empty records:", empty_count, "processed elements:", fullidx)
+    rootLogger.info("Time: " + str(time.time() - full_processing_time) + " Fetch time: " + str(fetch_stream_sum) + " sql_prefix: " +
+                    str(sql_prefix_sum) + " sql_link " + str(sql_link_sum) +"\nfetched records: " + fetch_idx + " fetched elements: " +
+                    str(elem_count) + " fetched empty records: " + str(empty_count)  + " processed elements: " + fullidx)
 
 
 
@@ -291,10 +310,10 @@ def aggregate_entrys():
         c.execute("VACUUM")
 
     except Exception as e:
-        print("[-] Something went wrong in the aggregation", e)
+        rootLogger.critical("[-] Something went wrong in the aggregation: " + e)
         return False
 
-    print("Aggregation time:", time.time() - t1)
+    rootLogger.info("Aggregation time:" + str(time.time() - t1))
     conn.commit()
     conn.close()
     return True
@@ -323,8 +342,9 @@ def print_db():
 
 if __name__ == '__main__':
     prepare_sql_database()
+    build_sql_db(thread_count=10)
     #test_sql()
-    aggregate_entrys()
+    #aggregate_entrys()
     #print_db()
    #test_sql(2
    #ip_min, ip_max = cal8late_min_max("2001:db8::/32")
