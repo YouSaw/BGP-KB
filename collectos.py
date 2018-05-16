@@ -9,3 +9,6 @@ MIL = "rrc10" #Italien
 FRA = "rrc12" #DE-CIX
 MOS = "rrc13" #MSX-IX
 SER = "route-views.soxrs" #SERBIEN
+
+
+#Data/tmp

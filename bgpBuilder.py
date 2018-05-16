@@ -4,8 +4,8 @@ import multiprocessing as mp
 
 import logging
 from collectos import *
-session_name = "test3"
-db_name = 'bgp_stage3.db'
+session_name = "test4"
+db_name = 'bgp_stage4.db'
 collectos =[FRA, NLI, STO, SER, AMS, MOS]
 
 from _pybgpstream import BGPStream, BGPRecord, BGPElem
@@ -149,16 +149,18 @@ def futures_done(future_list):
 def build_sql(record_list):
     record_prefix = []
     record_links = []
-    
+    none_count = 0
     for parsed_record in record_list:
         if parsed_record.type != "N":
             record_prefix.append(
                 (parsed_record.min_ip, parsed_record.max_ip, parsed_record.origin, 1, parsed_record.time))
             for as1, as2 in zip(parsed_record.as_path, parsed_record.as_path[1:]):
                 record_links.append((as1, as2, 1, 0))
-    return [record_prefix, record_links]
+        else:
+            none_count += 1
+    return [record_prefix, record_links], none_count
 
-def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_nr = "rrc12"):
+def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_nr = "rrc12", chunk_nr = 0):
     """
     fetches bgp records
     :param q: queue
@@ -181,7 +183,7 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
     idx = 0
     element_count = 0
     empty_count = 0
-
+    none_count = 0
     record_list = []
 
     while stream.get_next_record(rec):
@@ -192,15 +194,18 @@ def get_bgp_record(q, start_time = 1438416516, end_time = 1438416516, collector_
             idx += 1
             record_list.extend(d)
             if idx % 1000 == 0:
-                record_processed = build_sql(record_list)
+                record_processed, nc = build_sql(record_list)
+                none_count +=  nc
                 q.put(record_processed)
                 record_list = []
             element_count += len(d)
 
-    record_processed = build_sql(record_list)
+    record_processed, nc = build_sql(record_list)
+    none_count += nc
+
     q.put(record_processed)
-    rootLogger.info("[+] " + collector_nr +" is done with fetching")
-    return idx, empty_count, element_count
+    rootLogger.info("[+] " + collector_nr + " at chunk " + str(chunk_nr) +" is done with fetching")
+    return idx, empty_count, element_count, none_count
 
 def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     """
@@ -226,9 +231,6 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
 
     ####Timings####
     full_processing_time = time.time()
-    fetch_stream_sum = 0
-    sql_link_sum = 0
-    sql_prefix_sum = 0
 
     ####MP fetch of values####
     m = mp.Manager()
@@ -238,7 +240,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks)
     for i in range(0,collector_count):
         for x in range(chunks):
-            fetch_futures.append(fetch_executer.submit(get_bgp_record, q, chunked_time[x][0] , chunked_time[x][1], collector_list[i]))
+            fetch_futures.append(fetch_executer.submit(get_bgp_record, q, chunked_time[x][0] , chunked_time[x][1], collector_list[i], x))
 
 
     #Adjust priority
@@ -251,10 +253,9 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
             begin_trans = False
 
         try:
-            record_list = q.get(timeout = 1)
+            record_list = q.get(timeout = 10)
         except:
             rootLogger.info("[!] queue is emtpy")
-            time.sleep(2)
             continue
 
         #Processing in queue and then execute many
@@ -268,42 +269,26 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
             c.execute("COMMIT")
 
         if idx % 1000 == 0:
-            rootLogger.info("[!] Aggregation started!")
             aggregate_entrys()
 
     conn.commit()
     aggregate_entrys()
     conn.close()
 
+    #Statistic stuff
     empty_count = 0
     fetch_idx = 0
+    none_count = 0
     elem_count = 0
     for future in fetch_futures:
-        idx, count, elems = future.result()
+        idx, count, elems, none_c = future.result()
         fetch_idx += idx
         elem_count += elems
         empty_count += count
+        none_count += none_c
 
-    rootLogger.info("Time: " + str(time.time() - full_processing_time) + " Fetch time: " + str(fetch_stream_sum) + " sql_prefix: " +
-                    str(sql_prefix_sum) + " sql_link " + str(sql_link_sum) +"\nfetched records: " + str(fetch_idx) + " fetched elements: " +
-                    str(elem_count) + " fetched empty records: " + str(empty_count)  + " processed elements: " + str(fullidx))
-
-def test_sql():
-    conn = sqlite3.connect(db_name)
-    c = conn.cursor()
-    c.execute("SELECT * FROM as_link WHERE as_o = 901022")
-    cursor = c.fetchall()
-    if len(cursor) == 0:
-        print("LOL")
-    for entry in cursor:
-        for e in entry:
-            print(e,end=" ")
-        print("")
-    c.execute("BEGIN")
-    c.execute("UPDATE as_link SET count = count + 1, last_update = (?) WHERE as_o = (?) AND as_n = (?)", (6666, 9008, 9009))
-    c.execute("INSERT INTO as_link VALUES(?,?,?,?)", (90022, 9009, 1, 12345))
-    conn.commit()
-    conn.close()
+    rootLogger.info("Time: " + str(time.time() - full_processing_time) + "\nfetched records: " + str(fetch_idx) + " fetched elements: " +
+                    str(elem_count) + " fetched empty records: " + str(empty_count)+ " none count: "+ str(none_count) + " processed elements: " + str(fullidx))
 
 def make_chunks(start_time, end_time, chunks):
     full_time = end_time - start_time
@@ -322,11 +307,16 @@ def aggregate_entrys():
     1. creates tables for aggregation
     2.1 copy data from prefix_as aggregated to prefix_as_aggregate
     2.2. copy data from as_link aggregated to link_as_aggregate
-    3. creates tmp table and aggregate prefix_as_aggregate to tmp
+    3.1.1 creates tmp table and aggregate prefix_as_aggregate to tmp (second time step 2 could duplicate... therefore this)
+    3.1.2 alter tmp name to prefix_as_aggregate
+    3.2.1 same as 3.1.1 with other names
+    4. drop tables and VAAAACUUUM
+
     :return: True if successesfull
     """
     conn = sqlite3.connect(db_name)
     c = conn.cursor()
+    rootLogger.info("[!] Starting aggregation")
 
     t1 = time.time()
     try:
@@ -393,6 +383,4 @@ def print_db():
 
 if __name__ == '__main__':
     prepare_sql_database()
-    chunks = make_chunks((1526382859-24*60*60), 1526382859, 4)
-    print(chunks)
-    build_sql_db(collectos, start_time=(1526382859-600), end_time=1526382859, chunks=4)
+    build_sql_db(collectos, start_time=(1526382859-4800), end_time=1526382859-2400, chunks=4)
