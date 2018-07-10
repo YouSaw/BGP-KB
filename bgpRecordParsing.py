@@ -55,6 +55,10 @@ def prepare_sql_database():
 
     c.execute('''CREATE TABLE IF NOT EXISTS prefix_as
                  (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS as_prefix
+                 (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+
     #c.execute('PRAGMA synchronous=OFF')
     # c.execute('PRAGMA journal_mode=MEMORY')
     # c.execute('PRAGMA main.page_size = 4096')
@@ -111,13 +115,17 @@ def get_record_information(rec):
 def build_sql(record_list):
     record_prefix = []
     record_links = []
+    record_prefix_linker = []
     none_count = 0
+
     for parsed_record in record_list:
         if parsed_record.type != "N":
             record_prefix.append(
                 (parsed_record.min_ip, parsed_record.max_ip, parsed_record.origin, 1, parsed_record.time))
             for as1, as2 in zip(parsed_record.as_path, parsed_record.as_path[1:]):
                 record_links.append((as1, as2, 1, 0))
+            for as1 in parsed_record.as_path:
+                record_prefix_linker.append((parsed_record.min_ip, parsed_record.max_ip, as1, 1, parsed_record.time))
         else:
             none_count += 1
-    return [record_prefix, record_links], none_count
+    return [record_prefix, record_links, record_prefix_linker], none_count

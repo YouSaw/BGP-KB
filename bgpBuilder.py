@@ -7,7 +7,7 @@ from bgpRecordParsing import *
 from log import *
 
 
-
+####Multiprocessing helpers####
 def values_in_future(future_list):
     """
     checks if all jobs in the future list are done
@@ -36,7 +36,6 @@ def make_chunks(start_time, end_time, chunks):
     chunk_list[-1][1] = end_time
     return chunk_list
 
-
 def pull_bgp_records(q, start_time = 1438416516, end_time = 1438416516, collector_nr ="rrc12", chunk_nr = 0):
     """
     fetches bgp records
@@ -46,9 +45,12 @@ def pull_bgp_records(q, start_time = 1438416516, end_time = 1438416516, collecto
     :param collector_nr: string
     :return: fetch_count, emtpy_count, element_count
     """
+    #### Adjust priority####
     current_nice = os.nice(0)
     os.nice(7-current_nice)
 
+
+    ####BGP collector pulling init####
     rec = BGPRecord()
     stream = BGPStream()
     stream.add_filter('collector', collector_nr)
@@ -57,12 +59,14 @@ def pull_bgp_records(q, start_time = 1438416516, end_time = 1438416516, collecto
 
     rootLogger.info("[!] Starting multiprocess for collector: " + collector_nr + " range:" + str(start_time) + "-" + str(end_time) + "(" + str(end_time-start_time) + ")")
 
+    ####Statistic####
     idx = 0
     element_count = 0
     empty_count = 0
     none_count = 0
     record_list = []
 
+    ####Get bgp records####
     while stream.get_next_record(rec):
         d = get_record_information(rec)
         if d == [] or d is False:
@@ -70,6 +74,7 @@ def pull_bgp_records(q, start_time = 1438416516, end_time = 1438416516, collecto
         else:
             idx += 1
             record_list.extend(d)
+            #transform records to sql ready batch
             if idx % 1000 == 0:
                 record_processed, nc = build_sql(record_list)
                 none_count +=  nc
@@ -77,6 +82,7 @@ def pull_bgp_records(q, start_time = 1438416516, end_time = 1438416516, collecto
                 record_list = []
             element_count += len(d)
 
+    #Last row
     record_processed, nc = build_sql(record_list)
     none_count += nc
 
@@ -95,6 +101,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     """
     collector_count = len(collector_list)
 
+    ####Database Stuff####
     conn = sqlite3.connect(db_name)
     conn.isolation_level = None
     c = conn.cursor()
@@ -123,6 +130,8 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     #Adjust priority
     current_nice = os.nice(0)
     os.nice(0-current_nice)
+
+    ####Checking if all threads are done####
     while(not futures_done(fetch_futures) or not q.empty()):
         idx += 1
         if begin_trans:
@@ -136,8 +145,10 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
             continue
 
         #Processing in queue and then execute many
+
         c.executemany("INSERT INTO prefix_as VALUES(?,?,?,?,?)", record_list[0])
         c.executemany("INSERT INTO as_link VALUES(?,?,?,?)", record_list[1])
+        c.executemany("INSERT INTO as_prefix VALUES(?,?,?,?,?)", record_list[2])
         fullidx += len(record_list[0])
         
         if idx % 100 == 0: #Avoid to manny commits
@@ -148,11 +159,12 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
         if idx % 1000 == 0:
             aggregate_entrys()
 
+    ####Last commits####
     conn.commit()
     aggregate_entrys()
     conn.close()
 
-    #Statistic stuff
+    ####Statistic stuff####
     empty_count = 0
     fetch_idx = 0
     none_count = 0
@@ -190,16 +202,23 @@ def aggregate_entrys():
         c.execute('''CREATE TABLE IF NOT EXISTS prefix_as_aggregate
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
 
+        c.execute('''CREATE TABLE IF NOT EXISTS as_prefix_aggregate
+                     (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
+
         c.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
                      (as_o INTEGER, as_n INTEGER, count INTEGER)''')
 
+
         c.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
+
+        c.execute("INSERT INTO as_prefix_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
+                  " AS first_update, MAX(last_update) AS last_update FROM as_prefix GROUP BY ip_min, ip_max, as_o")
+
         c.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
 
         c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
                   " MAX(last_update) AS last_update FROM prefix_as_aggregate GROUP BY ip_min, ip_max, as_o")
-
         c.execute("DROP TABLE prefix_as_aggregate")
         c.execute("ALTER TABLE tmp RENAME TO prefix_as_aggregate")
 
@@ -207,13 +226,22 @@ def aggregate_entrys():
         c.execute("DROP TABLE link_as_aggregate")
         c.execute("ALTER TABLE tmp RENAME TO link_as_aggregate")
 
+        c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
+                  " MAX(last_update) AS last_update FROM as_prefix_aggregate GROUP BY ip_min, ip_max, as_o")
+        c.execute("DROP TABLE as_prefix_aggregate")
+        c.execute("ALTER TABLE tmp RENAME TO as_prefix_aggregate")
+
         c.execute("DROP TABLE prefix_as")
         c.execute("DROP TABLE as_link")
-
+        c.execute("DROP TABLE as_prefix")
+        
         c.execute('''CREATE TABLE IF NOT EXISTS as_link
                      (as_o INTEGER, as_n INTEGER, count INTEGER, last_update INTEGER)''')
 
         c.execute('''CREATE TABLE IF NOT EXISTS prefix_as
+                     (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+
+        c.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
         c.execute("VACUUM")
 
