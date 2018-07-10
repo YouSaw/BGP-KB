@@ -179,7 +179,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     rootLogger.info("Time: " + str(time.time() - full_processing_time) + "\nfetched records: " + str(fetch_idx) + " fetched elements: " +
                     str(elem_count) + " fetched empty records: " + str(empty_count)+ " none count: "+ str(none_count) + " processed elements: " + str(fullidx))
 
-
+from StringIO import StringIO
 def aggregate_entrys():
     """
     Aggregates entrys for smaller dbs
@@ -193,65 +193,93 @@ def aggregate_entrys():
 
     :return: True if successesfull
     """
-    conn = sqlite3.connect(db_name)
-    c = conn.cursor()
     rootLogger.info("[!] Starting aggregation")
+    timepoint = time.time()
 
-    t1 = time.time()
+    fileDB = sqlite3.connect(db_name)
+    tempfile = StringIO()
+    for line in fileDB.iterdump():
+        tempfile.write('%s\n' % line)
+    fileDB.close()
+    tempfile.seek(0)
+
+    memoryDB = sqlite3.connect(":memory:")
+    memoryDB.cursor().executescript(tempfile.read())
+    memoryDB.commit()
+    memoryCursor = memoryDB.cursor()
+
+
+
     try:
-        c.execute('''CREATE TABLE IF NOT EXISTS prefix_as_aggregate
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS prefix_as_aggregate
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS as_prefix_aggregate
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix_aggregate
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
                      (as_o INTEGER, as_n INTEGER, count INTEGER)''')
 
 
-        c.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
+        memoryCursor.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
 
-        c.execute("INSERT INTO as_prefix_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
+        memoryCursor.execute("INSERT INTO as_prefix_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM as_prefix GROUP BY ip_min, ip_max, as_o")
 
-        c.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
+        memoryCursor.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
 
-        c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
+        rootLogger.info("[!] insert time:" + str(time.time() - timepoint))
+
+
+        memoryCursor.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
                   " MAX(last_update) AS last_update FROM prefix_as_aggregate GROUP BY ip_min, ip_max, as_o")
-        c.execute("DROP TABLE prefix_as_aggregate")
-        c.execute("ALTER TABLE tmp RENAME TO prefix_as_aggregate")
+        memoryCursor.execute("DROP TABLE prefix_as_aggregate")
+        memoryCursor.execute("ALTER TABLE tmp RENAME TO prefix_as_aggregate")
 
-        c.execute("CREATE TABLE tmp AS SELECT as_o, as_n, sum(count) AS count FROM link_as_aggregate GROUP BY as_o, as_n")
-        c.execute("DROP TABLE link_as_aggregate")
-        c.execute("ALTER TABLE tmp RENAME TO link_as_aggregate")
+        memoryCursor.execute("CREATE TABLE tmp AS SELECT as_o, as_n, sum(count) AS count FROM link_as_aggregate GROUP BY as_o, as_n")
+        memoryCursor.execute("DROP TABLE link_as_aggregate")
+        memoryCursor.execute("ALTER TABLE tmp RENAME TO link_as_aggregate")
 
-        c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
+        memoryCursor.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
                   " MAX(last_update) AS last_update FROM as_prefix_aggregate GROUP BY ip_min, ip_max, as_o")
-        c.execute("DROP TABLE as_prefix_aggregate")
-        c.execute("ALTER TABLE tmp RENAME TO as_prefix_aggregate")
+        memoryCursor.execute("DROP TABLE as_prefix_aggregate")
+        memoryCursor.execute("ALTER TABLE tmp RENAME TO as_prefix_aggregate")
 
-        c.execute("DROP TABLE prefix_as")
-        c.execute("DROP TABLE as_link")
-        c.execute("DROP TABLE as_prefix")
+        rootLogger.info("[!] tmp insert time:" + str(time.time() - timepoint))
+
+        memoryCursor.execute("DROP TABLE prefix_as")
+        memoryCursor.execute("DROP TABLE as_link")
+        memoryCursor.execute("DROP TABLE as_prefix")
         
-        c.execute('''CREATE TABLE IF NOT EXISTS as_link
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS as_link
                      (as_o INTEGER, as_n INTEGER, count INTEGER, last_update INTEGER)''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS prefix_as
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS prefix_as
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
 
-        c.execute('''CREATE TABLE IF NOT EXISTS as_prefix
+        memoryCursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
-        c.execute("VACUUM")
+        memoryCursor.execute("VACUUM")
+        memoryDB.commit()
+
+        tempfile = StringIO()
+        fileDB = sqlite3.connect(db_name+"_test")
+
+        for line in memoryDB.iterdump():
+            tempfile.write('%s\n' % line)
+        memoryDB.close()
+        tempfile.seek(0)
+
+        fileDB.cursor().executescript(tempfile.read())
+        fileDB.commit()
+        fileDB.close()
 
     except Exception as e:
         rootLogger.critical("[-] Something went wrong in the aggregation: " + e)
         return False
 
-    rootLogger.info("[+] Aggregation time:" + str(time.time() - t1))
-    conn.commit()
-    conn.close()
+    rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint))
     return True
 
 def filter_entrys():
