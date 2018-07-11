@@ -59,13 +59,13 @@ def prepare_sql_database():
     c.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                  (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
 
-    #c.execute('PRAGMA synchronous=OFF')
-    # c.execute('PRAGMA journal_mode=MEMORY')
-    # c.execute('PRAGMA main.page_size = 4096')
-    # c.execute('PRAGMA main.cache_size=10000')
-    # c.execute('PRAGMA main.locking_mode=EXCLUSIVE')
+    c.execute('PRAGMA synchronous=OFF')
+    c.execute('PRAGMA journal_mode=MEMORY')
+    c.execute('PRAGMA page_size = 4096')
+    c.execute('PRAGMA cache_size=10000')
+    c.execute('PRAGMA locking_mode=EXCLUSIVE')
     # c.execute('PRAGMA main.synchronous=NORMAL')
-    c.execute('PRAGMA main.journal_mode=WAL')
+    #c.execute('PRAGMA journal_mode=WAL')
     conn.commit()
     conn.close()
 

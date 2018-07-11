@@ -208,6 +208,7 @@ def aggregate_entrys():
         c.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
                      (as_o INTEGER, as_n INTEGER, count INTEGER)''')
 
+        rootLogger.info("[+] Aggregation time:" + str(time.time() - t1))
 
         c.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
@@ -216,6 +217,8 @@ def aggregate_entrys():
                   " AS first_update, MAX(last_update) AS last_update FROM as_prefix GROUP BY ip_min, ip_max, as_o")
 
         c.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
+
+        rootLogger.info("[+] Aggregation time:" + str(time.time() - t1))
 
         c.execute("CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
                   " MAX(last_update) AS last_update FROM prefix_as_aggregate GROUP BY ip_min, ip_max, as_o")
@@ -230,6 +233,7 @@ def aggregate_entrys():
                   " MAX(last_update) AS last_update FROM as_prefix_aggregate GROUP BY ip_min, ip_max, as_o")
         c.execute("DROP TABLE as_prefix_aggregate")
         c.execute("ALTER TABLE tmp RENAME TO as_prefix_aggregate")
+        rootLogger.info("[+] Aggregation time:" + str(time.time() - t1))
 
         c.execute("DROP TABLE prefix_as")
         c.execute("DROP TABLE as_link")
@@ -244,6 +248,7 @@ def aggregate_entrys():
         c.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
         c.execute("VACUUM")
+        rootLogger.info("[+] Aggregation time:" + str(time.time() - t1))
 
     except Exception as e:
         rootLogger.critical("[-] Something went wrong in the aggregation: " + e)
