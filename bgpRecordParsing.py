@@ -40,32 +40,6 @@ def inflate_ipv6(ip):
     ip = ":".join([str(i).zfill(4) for i in ip])
     return ip
 
-def prepare_sql_database():
-    """
-    Prepares SQL DB with the right tables
-    Tables: as_link
-    Table: prefix_as (with ip min and max)
-    :return:
-    """
-    global memoryDB
-    memoryDB_cursor = memoryDB.cursor()
-    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS as_link
-                 (as_o INTEGER, as_n INTEGER, count INTEGER, last_update INTEGER)''')
-
-    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS prefix_as
-                 (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
-
-    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix
-                 (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
-
-    memoryDB_cursor.execute('PRAGMA synchronous=OFF')
-    memoryDB_cursor.execute('PRAGMA journal_mode=MEMORY')
-    memoryDB_cursor.execute('PRAGMA page_size = 4096')
-    memoryDB_cursor.execute('PRAGMA cache_size=10000')
-    memoryDB_cursor.execute('PRAGMA locking_mode=EXCLUSIVE')
-    # c.execute('PRAGMA main.synchronous=NORMAL')
-    #c.execute('PRAGMA journal_mode=WAL')
-    memoryDB.commit()
 
 class record_information(object):
     """

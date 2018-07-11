@@ -4,9 +4,9 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
 import multiprocessing as mp
 from _pybgpstream import BGPStream, BGPRecord, BGPElem
 from bgpRecordParsing import *
-from log import *
-from database import *
-
+import database
+import time
+import log
 
 ####Multiprocessing helpers####
 def values_in_future(future_list):
@@ -58,7 +58,7 @@ def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, c
     stream.add_interval_filter(start_time, end_time)
     stream.start()
 
-    rootLogger.info("[!] Starting multiprocess for collector: " + collector_nr + " range:" + str(start_time) + "-" + str(end_time) + "(" + str(end_time-start_time) + ")")
+    log.rootLogger.info("[!] Starting multiprocess for collector: " + collector_nr + " range:" + str(start_time) + "-" + str(end_time) + "(" + str(end_time-start_time) + ")")
 
     ####Statistic####
     idx = 0
@@ -88,10 +88,10 @@ def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, c
     none_count += tmp_none_count
 
     mt_queue.put(record_processed)
-    rootLogger.info("[+] " + collector_nr + " at chunk " + str(chunk_nr) +" is done with fetching")
+    log.rootLogger.info("[+] " + collector_nr + " at chunk " + str(chunk_nr) +" is done with fetching")
     return idx, empty_count, element_count, none_count
 
-def build_sql_db(collector_list, start_time, end_time, chunks = 4):
+def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     """
     Save bgp information in sql db. Makes threads and splitting of data
     :param collector_list:
@@ -100,7 +100,6 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
     :param chunks:
     :return:
     """
-    global memoryDB
     collector_count = len(collector_list)
 
     ####Database Stuff####
@@ -142,7 +141,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
         try:
             record_list = mt_queue.get(timeout = 10)
         except:
-            rootLogger.info("[!] queue is emtpy")
+            log.rootLogger.info("[!] queue is emtpy")
             continue
 
         #Processing in queue and then execute many
@@ -153,7 +152,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
         fullidx += len(record_list[0])
         
         if idx % 100 == 0: #Avoid to manny commits
-            rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
+            log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             begin_trans = True
             memoryDB_cursor.execute("COMMIT")
 
@@ -162,7 +161,7 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
 
     ####Last commits####
     memoryDB.commit()
-    aggregate_entrys()
+    database.aggregate_entrys()
     ####Statistic stuff####
     empty_count = 0
     fetch_idx = 0
@@ -175,8 +174,8 @@ def build_sql_db(collector_list, start_time, end_time, chunks = 4):
         empty_count += count
         none_count += none_c
 
-    rootLogger.info("Time: " + str(time.time() - full_processing_time) + "\nfetched records: " + str(fetch_idx) + " fetched elements: " +
-                    str(elem_count) + " fetched empty records: " + str(empty_count)+ " none count: "+ str(none_count) + " processed elements: " + str(fullidx))
+    log.rootLogger.info("Time: " + str(time.time() - full_processing_time) + "\nfetched records: " + str(fetch_idx) + " fetched elements: " +
+                str(elem_count) + " fetched empty records: " + str(empty_count)+ " none count: "+ str(none_count) + " processed elements: " + str(fullidx))
 
 
 def filter_entrys():
