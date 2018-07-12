@@ -178,12 +178,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
                 str(elem_count) + " fetched empty records: " + str(empty_count)+ " none count: "+ str(none_count) + " processed elements: " + str(fullidx))
 
 
-def filter_entrys():
-    """
-    Filter prefix entrys by substracting withdraws count from the announcemens and save all this in a final Database.
-    Entrys below a threshold will be pruned
-    :return: False or True maybe
-    """
+
 
 def print_db():
     conn = sqlite3.connect(db_name)

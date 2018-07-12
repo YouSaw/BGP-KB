@@ -140,3 +140,10 @@ def aggregate_entrys():
     log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
     memoryDB.commit()
     return True
+
+def filter_entrys():
+    """
+    Filter prefix entrys by substracting withdraws count from the announcemens and save all this in a final Database.
+    Entrys below a threshold will be pruned
+    :return: False or True maybe
+    """
