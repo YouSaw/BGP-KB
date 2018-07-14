@@ -77,7 +77,7 @@ def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, c
             idx += 1
             record_list.extend(recordInformation)
             #transform records to sql ready batch
-            if idx % 1000 == 0:
+            if idx % 2000 == 0:
                 record_processed, tmp_none_count = build_sql(record_list)
                 none_count +=  tmp_none_count
                 mt_queue.put(record_processed)
@@ -153,11 +153,11 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
         memoryDB_cursor.executemany("INSERT INTO as_prefix VALUES(?,?,?,?,?)", record_list[2])
         fullidx += len(record_list[0])
         
-        if idx % (100-chunks*2) == 0: #Avoid to manny commits
+        if idx % (500) == 0: #Avoid to manny commits
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             memoryDB.commit()
 
-        if idx % (1000-chunks*2) == 0:
+        if idx % (5000) == 0:
             database.aggregate_entrys()
 
         if idx % 100000 == 0:

@@ -23,6 +23,7 @@ def initDB(path=None):
     return memoryDB
 
 def saveDB(path):
+    log.rootLogger.info("[!] Writing memorydatabase to file")
     tempfile = StringIO()
     for line in memoryDB.iterdump():
         tempfile.write('%s\n' % line)
@@ -31,6 +32,7 @@ def saveDB(path):
     fileDB.cursor().executescript(tempfile.read())
     fileDB.commit()
     fileDB.close()
+    log.rootLogger.info("[!] Wrote database to file")
 
 
 def prepare_sql_database():
@@ -87,7 +89,7 @@ def aggregate_entrys():
         memoryDBCursor.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
                      (as_o INTEGER, as_n INTEGER, count INTEGER)''')
 
-        log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
+        log.rootLogger.info("[+] Aggregation init time:" + str(time.time() - timepoint1))
 
         memoryDBCursor.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
@@ -97,7 +99,7 @@ def aggregate_entrys():
 
         memoryDBCursor.execute("INSERT INTO link_as_aggregate SELECT as_o, as_n, count(*) AS count FROM as_link GROUP BY as_o, as_n")
 
-        log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
+        log.rootLogger.info("[+] Aggregation insert into aggregate tables time:" + str(time.time() - timepoint1))
 
         memoryDBCursor.execute(
             "CREATE TABLE tmp AS SELECT ip_min, ip_max, as_o, sum(count) AS count, MIN(last_update) AS first_update,"
@@ -115,7 +117,7 @@ def aggregate_entrys():
             " MAX(last_update) AS last_update FROM as_prefix_aggregate GROUP BY ip_min, ip_max, as_o")
         memoryDBCursor.execute("DROP TABLE as_prefix_aggregate")
         memoryDBCursor.execute("ALTER TABLE tmp RENAME TO as_prefix_aggregate")
-        log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
+        log.rootLogger.info("[+] Aggregation aggregate time:" + str(time.time() - timepoint1))
 
         memoryDBCursor.execute("DROP TABLE prefix_as")
         memoryDBCursor.execute("DROP TABLE as_link")
@@ -135,7 +137,7 @@ def aggregate_entrys():
         memoryDBCursor.execute("VACUUM")
         memoryDB.isolation_level = tmp
 
-        log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
+        log.rootLogger.info("[+] Aggregation vaacum time:" + str(time.time() - timepoint1))
 
     except Exception as e:
         log.rootLogger.critical("[-] Something went wrong in the aggregation: " + str(e))
