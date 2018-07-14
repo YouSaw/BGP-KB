@@ -118,7 +118,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
 
     ####MP fetch of values####
     multithreadingManager = mp.Manager()
-    mt_queue = multithreadingManager.Queue(maxsize=500)
+    mt_queue = multithreadingManager.Queue(maxsize=5000)
     fetch_futures = []
 
     chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks)
@@ -130,6 +130,8 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     #Adjust priority
     current_nice = os.nice(0)
     os.nice(0-current_nice)
+
+    log.rootLogger.info("[!] Beginning with database building!" + str(collector_list))
 
     ####Checking if all threads are done####
     while(not futures_done(fetch_futures) or not mt_queue.empty()):
@@ -151,13 +153,13 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
         memoryDB_cursor.executemany("INSERT INTO as_prefix VALUES(?,?,?,?,?)", record_list[2])
         fullidx += len(record_list[0])
         
-        if idx % 100 == 0: #Avoid to manny commits
+        if idx % (100-chunks*2) == 0: #Avoid to manny commits
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             begin_trans = True
             memoryDB_cursor.execute("COMMIT")
 
-        if idx % 1000 == 0:
-            aggregate_entrys()
+        if idx % (1000-chunks*2) == 0:
+            database.aggregate_entrys()
 
     ####Last commits####
     memoryDB.commit()
