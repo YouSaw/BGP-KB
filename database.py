@@ -26,7 +26,6 @@ def saveDB(path):
     tempfile = StringIO()
     for line in memoryDB.iterdump():
         tempfile.write('%s\n' % line)
-    memoryDB.close()
     tempfile.seek(0)
     fileDB = sqlite3.connect(path)
     fileDB.cursor().executescript(tempfile.read())

@@ -27,4 +27,5 @@ if __name__ == '__main__':
     memoryDB = initDB()
     bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks)
     saveDB(db_name)
+    memoryDB.close()
     log.rootLogger.info("[!] all done")
