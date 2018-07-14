@@ -3,6 +3,7 @@ from main import *
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
 import multiprocessing as mp
 from _pybgpstream import BGPStream, BGPRecord, BGPElem
+import gc
 from bgpRecordParsing import *
 import database
 import time
@@ -81,6 +82,7 @@ def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, c
                 none_count +=  tmp_none_count
                 mt_queue.put(record_processed)
                 record_list = []
+                gc.collect()
             element_count += len(recordInformation)
 
     #Last row
@@ -118,7 +120,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
 
     ####MP fetch of values####
     multithreadingManager = mp.Manager()
-    mt_queue = multithreadingManager.Queue(maxsize=50000)
+    mt_queue = multithreadingManager.Queue(maxsize=1000)
     fetch_futures = []
 
     chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks)
@@ -160,6 +162,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
 
         if idx % 100000 == 0:
             database.saveDB(db_name+"-idx-"+str(idx))
+        gc.collect()
 
     ####Last commits####
     memoryDB.commit()
