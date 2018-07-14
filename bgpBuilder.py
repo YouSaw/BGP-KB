@@ -133,13 +133,10 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
 
     log.rootLogger.info("[!] Beginning with database building!" + str(collector_list))
     time.sleep(5)
-    
+
     ####Checking if all threads are done####
     while(not futures_done(fetch_futures) or not mt_queue.empty()):
         idx += 1
-        if begin_trans:
-            memoryDB_cursor.execute('BEGIN')
-            begin_trans = False
 
         try:
             record_list = mt_queue.get(timeout = 10)
@@ -156,8 +153,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
         
         if idx % (100-chunks*2) == 0: #Avoid to manny commits
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
-            begin_trans = True
-            memoryDB_cursor.execute("COMMIT")
+            memoryDB.commit()
 
         if idx % (1000-chunks*2) == 0:
             database.aggregate_entrys()
