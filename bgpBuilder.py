@@ -132,7 +132,8 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     os.nice(0-current_nice)
 
     log.rootLogger.info("[!] Beginning with database building!" + str(collector_list))
-
+    time.sleep(5)
+    
     ####Checking if all threads are done####
     while(not futures_done(fetch_futures) or not mt_queue.empty()):
         idx += 1

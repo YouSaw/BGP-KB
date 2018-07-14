@@ -130,11 +130,16 @@ def aggregate_entrys():
 
         memoryDBCursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+
+        tmp = memoryDB.isolation_level
+        memoryDB.isolation_level = None
         memoryDBCursor.execute("VACUUM")
+        memoryDB.isolation_level = tmp
+
         log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
 
     except Exception as e:
-        log.rootLogger.critical("[-] Something went wrong in the aggregation: " + e)
+        log.rootLogger.critical("[-] Something went wrong in the aggregation: " + str(e))
         return False
 
     log.rootLogger.info("[+] Aggregation time:" + str(time.time() - timepoint1))
