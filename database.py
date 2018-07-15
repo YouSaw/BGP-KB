@@ -162,3 +162,6 @@ def filter_entrys():
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
     memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO as_link")
     log.rootLogger.info("[!] End filtering")
+
+def createSearchIDX():
+    pass

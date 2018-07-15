@@ -13,9 +13,9 @@ if __name__ == '__main__':
     global db_name
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--start", help="startTime")
-    parser.add_argument("-e", "--end", help="endTime")
-    parser.add_argument("-c", "--chunks", help="chunks")
+    parser.add_argument("-s", "--start", help="startTime", default=1438417216)
+    parser.add_argument("-e", "--end", help="endTime", default=1438417216)
+    parser.add_argument("-c", "--chunks", help="chunks", default=2)
     parser.add_argument("-db", "--database", help="DB name")
     parser.add_argument("-se", "--session", help="Session name")
     args = parser.parse_args()
