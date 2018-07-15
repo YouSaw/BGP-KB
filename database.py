@@ -148,8 +148,17 @@ def aggregate_entrys():
     return True
 
 def filter_entrys():
-    """
-    Filter prefix entrys by substracting withdraws count from the announcemens and save all this in a final Database.
-    Entrys below a threshold will be pruned
-    :return: False or True maybe
-    """
+    memoryDBCursor = memoryDB.cursor()
+    log.rootLogger.info("[!] Starting filtering")
+    memoryDBCursor.execute('''DELETE FROM prefix_as_aggregate WHERE count < 9''') #6 collectors min 50% doppelt gehört
+    memoryDBCursor.execute('''DELETE FROM as_prefix_aggregate WHERE count < 18''')#6 collectors, öfter beobachtet
+    memoryDBCursor.execute('''DELETE FROM link_as_aggregate WHERE count < 20''')
+
+    memoryDBCursor.execute("DROP TABLE prefix_as")
+    memoryDBCursor.execute("DROP TABLE as_link")
+    memoryDBCursor.execute("DROP TABLE as_prefix")
+
+    memoryDBCursor.execute("ALTER TABLE prefix_as_aggregate RENAME TO prefix_as")
+    memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
+    memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO as_link")
+    log.rootLogger.info("[!] End filtering")
