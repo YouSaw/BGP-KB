@@ -161,7 +161,9 @@ def filter_entrys():
     memoryDBCursor.execute("ALTER TABLE prefix_as_aggregate RENAME TO prefix_as")
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
     memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO as_link")
-    log.rootLogger.info("[!] End filtering")
 
-def createSearchIDX():
-    pass
+    memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
+    memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
+
+    #TODO active row
+    log.rootLogger.info("[!] End filtering")
