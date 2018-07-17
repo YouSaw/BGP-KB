@@ -186,7 +186,7 @@ def filter_entrys():
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
     memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO link_as")
 
-    memoryDBCursor.execute("ALTER TABLE as_prefix DROP last_update, count, first_update")
+    memoryDBCursor.execute("ALTER TABLE as_prefix DROP COLUMN last_update, count, first_update")
     log.rootLogger.info("[!] Altered tables")
 
     memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
