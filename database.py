@@ -175,8 +175,8 @@ def filter_entrys():
 
     memoryDBCursor.execute(
         "INSERT INTO prefix_as SELECT ip_min, ip_max, as_o, last_update FROM prefix_as_aggregate AS p1 WHERE  p1.as_o != -1 AND"
-        " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
-        " p2.last_update < p1.last_update) GROUP BY ip_min, ip_max, as_o")
+        "NOT EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
+        " p2.last_update >= p1.last_update) GROUP BY ip_min, ip_max, as_o")
 
     log.rootLogger.info("[!] Got new preifx as table")
 

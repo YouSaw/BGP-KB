@@ -30,7 +30,7 @@ if __name__ == '__main__':
         memoryDB = initDB("cluster_1_DB")
         filter_entrys()
         saveDB("Detection_DB")
-
+        exit(0)
     memoryDB = initDB()
     bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks)
     saveDB(db_name)
