@@ -171,7 +171,7 @@ def filter_entrys():
         " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
         " p2.last_update >= p1.last_update)GROUP BY ip_min, ip_max, as_o")
 
-    memoryDBCursor.execute("UPDATE prefix_as_aggregate SET last_update = -1") #Set as inactive (withdrawn)
+    memoryDBCursor.execute("UPDATE prefix_as SET last_update = -1") #Set as inactive (withdrawn)
 
     memoryDBCursor.execute(
         "INSERT INTO prefix_as SELECT ip_min, ip_max, as_o, last_update FROM prefix_as_aggregate AS p1 WHERE  p1.as_o != -1 AND "
@@ -180,7 +180,7 @@ def filter_entrys():
 
     log.rootLogger.info("[!] Got new preifx as table")
 
-    memoryDBCursor.execute("UPDATE prefix_as_aggregate SET last_update = 1 WHERE last_update != -1")
+    memoryDBCursor.execute("UPDATE prefix_as SET last_update = 1 WHERE last_update != -1")
 
     memoryDBCursor.execute("DROP TABLE prefix_as_aggregate")
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
