@@ -163,6 +163,9 @@ def filter_entrys():
     memoryDBCursor.execute("DROP TABLE as_prefix")
     log.rootLogger.info("[!] Dropped tables")
 
+    memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as_aggregate (ip_min, ip_max)")
+    log.rootLogger.info("[!] created indexes filtering")
+
     memoryDBCursor.execute(
         "CREATE TABLE prefix_as AS SELECT ip_min, ip_max, as_o, last_update FROM prefix_as_aggregate AS p1 WHERE  p1.as_o != -1 AND"
         " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
