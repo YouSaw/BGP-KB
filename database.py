@@ -6,6 +6,8 @@ memoryDB = None
 
 def initDB(path=None):
     global memoryDB
+    log.rootLogger.info("[!] Reading file to memory")
+
     # Read database to tempfile
     memoryDB = sqlite3.connect(":memory:")
 
@@ -20,6 +22,8 @@ def initDB(path=None):
         memoryDB.cursor().executescript(tempfile.read())
         memoryDB.commit()
     prepare_sql_database()
+    log.rootLogger.info("[!] Done reading file to memory")
+
     return memoryDB
 
 def saveDB(path):
@@ -170,7 +174,7 @@ def filter_entrys():
         " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
         " p2.last_update < p1.last_update) GROUP BY ip_min, ip_max, as_o")
 
-    memoryDBCursor.execute("UPDATE last_update FROM prefix_as_aggregate SET last_update = 1")
+    memoryDBCursor.execute("UPDATE prefix_as_aggregate SET last_update = 1 WHERE last_update != -1")
 
     memoryDBCursor.execute("DROP TABLE prefix_as_aggregate")
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
