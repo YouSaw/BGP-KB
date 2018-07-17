@@ -150,9 +150,9 @@ def aggregate_entrys():
 def filter_entrys():
     memoryDBCursor = memoryDB.cursor()
     log.rootLogger.info("[!] Starting filtering")
-    memoryDBCursor.execute('''DELETE FROM prefix_as_aggregate WHERE count < 9''') #6 collectors min 50% doppelt gehört
-    memoryDBCursor.execute('''DELETE FROM as_prefix_aggregate WHERE count < 18''')#6 collectors, öfter beobachtet
-    memoryDBCursor.execute('''DELETE FROM link_as_aggregate WHERE count < 20''')
+    memoryDBCursor.execute('''DELETE FROM prefix_as_aggregate WHERE count < 9 AND as_o != -1''') #6 collectors min 50% doppelt gehört
+    memoryDBCursor.execute('''DELETE FROM as_prefix_aggregate WHERE count < 10''')#6 collectors, öfter beobachtet
+    memoryDBCursor.execute('''DELETE FROM link_as_aggregate WHERE count < 10''')
 
     memoryDBCursor.execute("DROP TABLE prefix_as")
     memoryDBCursor.execute("DROP TABLE as_link")
