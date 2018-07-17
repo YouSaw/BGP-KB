@@ -27,9 +27,9 @@ if __name__ == '__main__':
     chunks = int(args.chunks)
     transform = int(args.transform)
     if transform == 1:
-        memoryDB = initDB("cluster_1_DB")
+        memoryDB = initDB("cluster_1_DB2")
         filter_entrys()
-        saveDB("Detection_DB_1")
+        saveDB("Detection_DB_2")
 
     memoryDB = initDB()
     bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks)
