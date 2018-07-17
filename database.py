@@ -158,9 +158,23 @@ def filter_entrys():
     memoryDBCursor.execute("DROP TABLE as_link")
     memoryDBCursor.execute("DROP TABLE as_prefix")
 
-    memoryDBCursor.execute("ALTER TABLE prefix_as_aggregate RENAME TO prefix_as")
+    memoryDBCursor.execute(
+        "CREATE TABLE prefix_as AS SELECT p1.ip_min, p1.ip_max, p1.as_o, p1.last_update FROM prefix_as_aggregate AS p1 WHERE  p1.as_o != -1 AND"
+        " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
+        " p2.last_update >= p1.last_update)GROUP BY ip_min, ip_max, as_o")
+
+    memoryDBCursor.execute("UPDATE prefix_as_aggregate SET last_update = -1") #Set as inactive (withdrawn)
+
+    memoryDBCursor.execute(
+        "INSERT INTO prefix_as SELECT p1.ip_min, p1.ip_max, p1.as_o, p1.last_update FROM prefix_as_aggregate AS p1 WHERE  p1.as_o != -1 AND"
+        " EXISTS(SELECT * FROM prefix_as_aggregate AS p2 WHERE p2.as_o = -1 AND p2.ip_min = p1.ip_min AND p2.ip_max= p1.ip_max AND"
+        " p2.last_update < p1.last_update) GROUP BY ip_min, ip_max, as_o")
+
+    memoryDBCursor.execute("UPDATE last_update FROM prefix_as_aggregate SET last_update = 1")
+
+    memoryDBCursor.execute("DROP TABLE prefix_as_aggregate")
     memoryDBCursor.execute("ALTER TABLE as_prefix_aggregate RENAME TO as_prefix")
-    memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO as_link")
+    memoryDBCursor.execute("ALTER TABLE link_as_aggregate RENAME TO link_as")
 
     memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
     memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
