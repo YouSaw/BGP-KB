@@ -18,11 +18,18 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--chunks", help="chunks", default=2)
     parser.add_argument("-db", "--database", help="DB name")
     parser.add_argument("-se", "--session", help="Session name")
+    parser.add_argument("-t", "--transform", help="Transform database", default=0)
+
     args = parser.parse_args()
 
     startTime = int(args.start)
     endTime = int(args.end)
     chunks = int(args.chunks)
+    transform = int(args.transform)
+    if transform == 1:
+        memoryDB = initDB("cluster_1_DB")
+        filter_entrys()
+        saveDB("Detection_DB_1")
 
     memoryDB = initDB()
     bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks)

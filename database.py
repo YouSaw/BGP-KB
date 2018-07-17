@@ -179,5 +179,4 @@ def filter_entrys():
     memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
     memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
 
-    #TODO active row
     log.rootLogger.info("[!] End filtering")
