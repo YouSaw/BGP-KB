@@ -152,11 +152,11 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
         memoryDB_cursor.executemany("INSERT INTO as_prefix VALUES(?,?,?,?,?)", record_list[2])
         fullidx += len(record_list[0])
         
-        if idx % (100) == 0: #Avoid to manny commits
+        if idx % (200) == 0: #Avoid to manny commits
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             memoryDB.commit()
 
-        if idx % (1000) == 0:
+        if idx % (2000) == 0:
             database.aggregate_entrys()
 
         if idx % 50000 == 0:

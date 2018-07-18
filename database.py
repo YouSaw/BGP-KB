@@ -67,10 +67,7 @@ def prepare_sql_database():
 
     memoryDB_cursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
     memoryDB_cursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
-    memoryDB_cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as_agg ON prefix_as_aggregate (ip_min, ip_max)")
-    memoryDB_cursor.execute(
-        "CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix_agg ON as_prefix_aggregate (ip_min, ip_max)")
+
 
     memoryDB_cursor.execute('PRAGMA synchronous=OFF')
     memoryDB_cursor.execute('PRAGMA journal_mode=MEMORY')
@@ -158,6 +155,13 @@ def aggregate_entrys():
 
         memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
         memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
+        memoryDBCursor.execute(
+            "CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as_agg ON prefix_as_aggregate (ip_min, ip_max)")
+        memoryDBCursor.execute(
+            "CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix_agg ON as_prefix_aggregate (ip_min, ip_max)")
+
+        log.rootLogger.info("[+] Aggregation prefix time:" + str(time.time() - timepoint1))
+
 
         tmp = memoryDB.isolation_level
         memoryDB.isolation_level = None
