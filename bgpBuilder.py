@@ -27,7 +27,7 @@ def futures_done(future_list):
             return False
     return True
 
-def make_chunks(start_time, end_time, chunks):
+def make_chunks(start_time, end_time, chunks, realTime = False):
     full_time = end_time - start_time
     time_chunk = full_time // chunks
     print(full_time, time_chunk)
@@ -36,6 +36,9 @@ def make_chunks(start_time, end_time, chunks):
         chunk_list.append([start_time + x, start_time + x + time_chunk])
 
     chunk_list[-1][1] = end_time
+    if realTime:
+        chunk_list.append(end_time, 0)
+
     return chunk_list
 
 def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, collector_nr ="rrc12", chunk_nr = 0):
@@ -93,7 +96,7 @@ def pull_bgp_records(mt_queue, start_time = 1438416516, end_time = 1438416516, c
     log.rootLogger.info("[+] " + collector_nr + " at chunk " + str(chunk_nr) +" is done with fetching")
     return idx, empty_count, element_count, none_count
 
-def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
+def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4, realtime = False):
     """
     Save bgp information in sql db. Makes threads and splitting of data
     :param collector_list:
@@ -108,7 +111,6 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     memoryDB.isolation_level = None
     memoryDB_cursor = memoryDB.cursor()
 
-    fetch_executer = ProcessPoolExecutor(max_workers=collector_count * chunks)
 
     ####Index and lock####
     idx = 0
@@ -122,7 +124,9 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     mt_queue = multithreadingManager.Queue(maxsize=500)
     fetch_futures = []
 
-    chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks)
+    chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks, realTime=realtime)
+    fetch_executer = ProcessPoolExecutor(max_workers=collector_count * len(chunked_time))
+
     for i in range(0,collector_count):
         for x in range(chunks):
             fetch_futures.append(fetch_executer.submit(pull_bgp_records, mt_queue, chunked_time[x][0], chunked_time[x][1], collector_list[i], x))

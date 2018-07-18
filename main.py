@@ -19,12 +19,18 @@ if __name__ == '__main__':
     parser.add_argument("-db", "--database", help="DB name")
     parser.add_argument("-se", "--session", help="Session name")
     parser.add_argument("-t", "--transform", help="Transform database", default=0)
+    parser.add_argument("-r", "--realtime", help="realtime mode", default=0)
+
 
     args = parser.parse_args()
 
     startTime = int(args.start)
     endTime = int(args.end)
     chunks = int(args.chunks)
+    realtime = False
+    if int(args.realtime) == 1:
+        realtime = True
+
     transform = int(args.transform)
     if transform == 1:
         memoryDB = initDB("cluster_1_DB")
@@ -33,7 +39,7 @@ if __name__ == '__main__':
         exit(0)
     memoryDB = initDB()
 
-    bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks)
+    bgpb.build_sql_db(collectos, start_time=startTime, end_time=endTime, memoryDB=memoryDB, chunks=chunks, realtime=realtime)
     saveDB(db_name)
     memoryDB.close()
     log.rootLogger.info("[!] all done")
