@@ -119,7 +119,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
 
     ####MP fetch of values####
     multithreadingManager = mp.Manager()
-    mt_queue = multithreadingManager.Queue(maxsize=1000)
+    mt_queue = multithreadingManager.Queue(maxsize=500)
     fetch_futures = []
 
     chunked_time = make_chunks(start_time=start_time, end_time=end_time, chunks=chunks)
@@ -156,10 +156,10 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             memoryDB.commit()
 
-        if idx % (5000) == 0:
+        if idx % (1000) == 0:
             database.aggregate_entrys()
 
-        if idx % 100000 == 0:
+        if idx % 50000 == 0:
             database.saveDB(db_name+"-idx-"+str(idx))
         gc.collect()
 

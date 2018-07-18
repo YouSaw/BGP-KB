@@ -56,6 +56,22 @@ def prepare_sql_database():
     memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                  (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
 
+    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS prefix_as_aggregate
+                 (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
+
+    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix_aggregate
+                 (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, first_update INTEGER, last_update INTEGER)''')
+
+    memoryDB_cursor.execute('''CREATE TABLE IF NOT EXISTS link_as_aggregate
+                 (as_o INTEGER, as_n INTEGER, count INTEGER)''')
+
+    memoryDB_cursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
+    memoryDB_cursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
+    memoryDB_cursor.execute(
+        "CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as_agg ON prefix_as_aggregate (ip_min, ip_max)")
+    memoryDB_cursor.execute(
+        "CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix_agg ON as_prefix_aggregate (ip_min, ip_max)")
+
     memoryDB_cursor.execute('PRAGMA synchronous=OFF')
     memoryDB_cursor.execute('PRAGMA journal_mode=MEMORY')
     memoryDB_cursor.execute('PRAGMA page_size = 4096')
@@ -139,6 +155,9 @@ def aggregate_entrys():
 
         memoryDBCursor.execute('''CREATE TABLE IF NOT EXISTS as_prefix
                      (ip_min TEXT, ip_max TEXT, as_o INTEGER, count INTEGER, last_update INTEGER)''')
+
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
 
         tmp = memoryDB.isolation_level
         memoryDB.isolation_level = None
