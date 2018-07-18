@@ -37,7 +37,7 @@ def make_chunks(start_time, end_time, chunks, realTime = False):
 
     chunk_list[-1][1] = end_time
     if realTime:
-        chunk_list.append(end_time, 0)
+        chunk_list.append([end_time, 0])
 
     return chunk_list
 
