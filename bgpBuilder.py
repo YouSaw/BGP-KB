@@ -113,7 +113,6 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
     ####Index and lock####
     idx = 0
     fullidx = 0
-    begin_trans = True
 
     ####Timings####
     full_processing_time = time.time()
@@ -153,7 +152,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4):
         memoryDB_cursor.executemany("INSERT INTO as_prefix VALUES(?,?,?,?,?)", record_list[2])
         fullidx += len(record_list[0])
         
-        if idx % (500) == 0: #Avoid to manny commits
+        if idx % (100) == 0: #Avoid to manny commits
             log.rootLogger.info("[!] Commit. Processed : "+ str(fullidx))
             memoryDB.commit()
 

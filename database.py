@@ -94,6 +94,10 @@ def aggregate_entrys():
                      (as_o INTEGER, as_n INTEGER, count INTEGER)''')
 
         log.rootLogger.info("[+] Aggregation init time:" + str(time.time() - timepoint1))
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as ON prefix_as (ip_min, ip_max)")
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix ON as_prefix (ip_min, ip_max)")
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_prefix_as_agg ON prefix_as_aggregate (ip_min, ip_max)")
+        memoryDBCursor.execute("CREATE INDEX IF NOT EXISTS ip_min_max_as_prefix_agg ON as_prefix_aggregate (ip_min, ip_max)")
 
         memoryDBCursor.execute("INSERT INTO prefix_as_aggregate SELECT ip_min, ip_max, as_o, count(*) AS count, MIN(last_update)"
                   " AS first_update, MAX(last_update) AS last_update FROM prefix_as GROUP BY ip_min, ip_max, as_o")
