@@ -3,7 +3,7 @@ from database import *
 import argparse
 session_name = "cluster_1"
 db_name = "cluster_1_DB"
-collectos =[FRA, NLI, STO, SER, AMS, MOS]
+collectos =[FRA, NLI, MOS]
 
 import bgpBuilder as bgpb
 import log
