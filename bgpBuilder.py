@@ -38,6 +38,7 @@ def make_chunks(start_time, end_time, chunks, realTime = False):
     chunk_list[-1][1] = end_time
     if realTime:
         chunk_list.append([end_time, 0])
+        log.rootLogger.info("Realtime chunk: "+ str(chunk_list[-1]))
 
     return chunk_list
 
@@ -128,7 +129,7 @@ def build_sql_db(collector_list, start_time, end_time, memoryDB,  chunks = 4, re
     fetch_executer = ProcessPoolExecutor(max_workers=collector_count * len(chunked_time))
 
     for i in range(0,collector_count):
-        for x in range(chunks):
+        for x in range(len(chunked_time)):
             fetch_futures.append(fetch_executer.submit(pull_bgp_records, mt_queue, chunked_time[x][0], chunked_time[x][1], collector_list[i], x))
 
 

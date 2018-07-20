@@ -29,6 +29,7 @@ if __name__ == '__main__':
     chunks = int(args.chunks)
     realtime = False
     if int(args.realtime) == 1:
+        log.rootLogger.info("Realtime mode")
         realtime = True
 
     transform = int(args.transform)
